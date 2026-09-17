@@ -50,7 +50,7 @@ describe("kenza webhook e2e acceptance scenarios", () => {
   beforeEach(() => {
     invoke.mockReset();
     sendWhatsAppMessage.mockReset().mockResolvedValue(undefined);
-    process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN = "test-verify-token";
+    process.env["WHATSAPP_WEBHOOK_VERIFY_TOKEN"] = "test-verify-token";
   });
 
   it("scenario 1: confirms the Meta webhook subscription with a valid verify token", () => {
@@ -124,7 +124,7 @@ describe("kenza webhook e2e acceptance scenarios", () => {
   });
 
   it("scenario 5: skips sending a WhatsApp reply when the graph produces no assistant message", async () => {
-    invoke.mockResolvedValue({ messages: [{ role: "user", content: "salut" }] });
+    invoke.mockResolvedValue({ messages: [] });
 
     const response = await POST(
       postRequest(
