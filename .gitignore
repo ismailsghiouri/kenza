@@ -45,5 +45,3 @@ next-env.d.ts
 # Docker
 *.log
 
-# Drizzle
-drizzle/meta/
