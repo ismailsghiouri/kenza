@@ -1,5 +1,5 @@
 import { StateGraph, END, START, Annotation } from "@langchain/langgraph";
-import { anthropic, CLAUDE_MODEL } from "@/lib/claude";
+import { getAnthropicClient, CLAUDE_MODEL } from "@/lib/claude";
 import type { AgentState } from "@/types";
 
 const AgentStateAnnotation = Annotation.Root({
@@ -16,7 +16,7 @@ const AgentStateAnnotation = Annotation.Root({
 });
 
 async function respond(state: typeof AgentStateAnnotation.State) {
-  const response = await anthropic.messages.create({
+  const response = await getAnthropicClient().messages.create({
     model: CLAUDE_MODEL,
     max_tokens: 1024,
     messages: state.messages.map((m) => ({ role: m.role, content: m.content })),

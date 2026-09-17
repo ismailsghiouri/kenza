@@ -33,9 +33,9 @@ export interface ClassifierDeps {
 const KNOWN_INTENTS: readonly KenzaIntent[] = ["search", "checkout", "question", "unknown"];
 
 async function defaultClassify(message: string): Promise<KenzaIntent> {
-  const { anthropic, CLAUDE_MODEL } = await import("@/lib/claude");
+  const { getAnthropicClient, CLAUDE_MODEL } = await import("@/lib/claude");
 
-  const response = await anthropic.messages.create({
+  const response = await getAnthropicClient().messages.create({
     model: CLAUDE_MODEL,
     max_tokens: 16,
     messages: [
@@ -134,7 +134,7 @@ export interface ExplainerDeps {
 }
 
 async function defaultExplain(state: KenzaNodeState): Promise<string> {
-  const { anthropic, CLAUDE_MODEL } = await import("@/lib/claude");
+  const { getAnthropicClient, CLAUDE_MODEL } = await import("@/lib/claude");
 
   const context = JSON.stringify({
     intent: state.intent,
@@ -143,7 +143,7 @@ async function defaultExplain(state: KenzaNodeState): Promise<string> {
     validation: state.validation,
   });
 
-  const response = await anthropic.messages.create({
+  const response = await getAnthropicClient().messages.create({
     model: CLAUDE_MODEL,
     max_tokens: 512,
     messages: [

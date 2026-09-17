@@ -1,8 +1,8 @@
 const WHATSAPP_API_VERSION = "v21.0";
 
 function getConfig() {
-  const token = process.env.WHATSAPP_API_TOKEN;
-  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const token = process.env["WHATSAPP_API_TOKEN"];
+  const phoneNumberId = process.env["WHATSAPP_PHONE_NUMBER_ID"];
 
   if (!token || !phoneNumberId) {
     throw new Error("WhatsApp API credentials are not set");
@@ -42,7 +42,7 @@ export function verifyWebhookChallenge(
   token: string | null,
   challenge: string | null,
 ): string | null {
-  const expectedToken = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
+  const expectedToken = process.env["WHATSAPP_WEBHOOK_VERIFY_TOKEN"];
 
   if (mode === "subscribe" && token === expectedToken && challenge) {
     return challenge;

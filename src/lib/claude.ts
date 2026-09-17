@@ -1,11 +1,19 @@
 import Anthropic from "@anthropic-ai/sdk";
 
-const apiKey = process.env.ANTHROPIC_API_KEY;
+let client: Anthropic | undefined;
 
-if (!apiKey) {
-  throw new Error("ANTHROPIC_API_KEY is not set");
+export function getAnthropicClient(): Anthropic {
+  if (!client) {
+    const apiKey = process.env["ANTHROPIC_API_KEY"];
+
+    if (!apiKey) {
+      throw new Error("ANTHROPIC_API_KEY is not set");
+    }
+
+    client = new Anthropic({ apiKey });
+  }
+
+  return client;
 }
-
-export const anthropic = new Anthropic({ apiKey });
 
 export const CLAUDE_MODEL = "claude-sonnet-5";
