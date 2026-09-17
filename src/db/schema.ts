@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, integer, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, integer, boolean, pgEnum } from "drizzle-orm/pg-core";
 
 export const orderStatusEnum = pgEnum("order_status", [
   "pending",
@@ -9,6 +9,13 @@ export const orderStatusEnum = pgEnum("order_status", [
 ]);
 
 export const messageRoleEnum = pgEnum("message_role", ["user", "assistant"]);
+
+export const productCategoryEnum = pgEnum("product_category", [
+  "phone",
+  "tablet",
+  "laptop",
+  "accessory",
+]);
 
 export const customers = pgTable("customers", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -21,8 +28,18 @@ export const products = pgTable("products", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
   description: text("description"),
+  category: productCategoryEnum("category").notNull(),
   priceCents: integer("price_cents").notNull(),
   stock: integer("stock").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const discounts = pgTable("discounts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  code: text("code").notNull().unique(),
+  description: text("description"),
+  percent: integer("percent").notNull(),
+  active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
