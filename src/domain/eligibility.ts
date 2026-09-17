@@ -58,3 +58,19 @@ const CANCELLABLE_STATUSES: ReadonlySet<OrderStatus> = new Set(["pending", "conf
 export function isOrderCancellable(status: OrderStatus): boolean {
   return CANCELLABLE_STATUSES.has(status);
 }
+
+export interface DiscountRecord {
+  code: string;
+  percent: number;
+  active: boolean;
+}
+
+export function validateDiscount(discount: DiscountRecord | null | undefined): boolean {
+  if (!discount) {
+    return false;
+  }
+  if (!discount.active) {
+    return false;
+  }
+  return discount.percent > 0 && discount.percent <= 100;
+}
