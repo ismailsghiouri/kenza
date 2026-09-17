@@ -1,0 +1,14 @@
+[
+  {
+    "name": "T-shirt Kenza",
+    "description": "T-shirt en coton bio",
+    "priceCents": 2500,
+    "stock": 100
+  },
+  {
+    "name": "Casquette Kenza",
+    "description": "Casquette brodée",
+    "priceCents": 1500,
+    "stock": 50
+  }
+]

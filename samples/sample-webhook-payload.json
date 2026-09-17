@@ -1,0 +1,29 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "0",
+      "changes": [
+        {
+          "field": "messages",
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {
+              "display_phone_number": "15550001111",
+              "phone_number_id": "000000000000000"
+            },
+            "messages": [
+              {
+                "from": "212600000000",
+                "id": "wamid.sample",
+                "timestamp": "1700000000",
+                "type": "text",
+                "text": { "body": "Bonjour, avez-vous des t-shirts en stock ?" }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
