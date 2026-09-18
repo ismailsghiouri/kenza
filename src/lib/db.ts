@@ -3,11 +3,13 @@ import { db } from "../db/client";
 
 export { db };
 
-export async function healthCheck(): Promise<boolean> {
+export type HealthCheckResult = { ok: boolean; error?: string };
+
+export async function healthCheck(): Promise<HealthCheckResult> {
   try {
     await db.execute(sql`select 1`);
-    return true;
-  } catch {
-    return false;
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
