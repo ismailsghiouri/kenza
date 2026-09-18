@@ -6,7 +6,6 @@ import { db } from "../../src/db/client";
 import {
   products,
   customers,
-  deliveryZones,
   orders,
   orderItems,
   InsertProductSchema,
