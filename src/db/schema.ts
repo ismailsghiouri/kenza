@@ -46,7 +46,13 @@ export const products = pgTable("products", {
   poidsG: integer("poids_g").notNull(),
 });
 
-export const InsertProductSchema = createInsertSchema(products);
+export const InsertProductSchema = createInsertSchema(products, {
+  prixMad: (schema) => schema.positive("prix_mad doit être supérieur à 0"),
+  stock: (schema) => schema.nonnegative("stock ne peut pas être négatif"),
+  poidsG: (schema) => schema.positive("poids_g doit être supérieur à 0"),
+  delaiReassortJours: (schema) =>
+    schema.nonnegative("delai_reassort_jours ne peut pas être négatif"),
+});
 export const SelectProductSchema = createSelectSchema(products);
 
 // ---------------------------------------------------------------------------
@@ -64,7 +70,11 @@ export const customers = pgTable("customers", {
   segment: segmentEnum("segment").notNull(),
 });
 
-export const InsertCustomerSchema = createInsertSchema(customers);
+export const InsertCustomerSchema = createInsertSchema(customers, {
+  nbCommandes: (schema) => schema.nonnegative("nb_commandes ne peut pas être négatif"),
+  premierAchat: (schema) =>
+    schema.max(new Date(), { message: "premier_achat ne peut pas être une date future" }),
+});
 export const SelectCustomerSchema = createSelectSchema(customers);
 
 // ---------------------------------------------------------------------------
@@ -79,7 +89,10 @@ export const deliveryZones = pgTable("delivery_zones", {
   retraitBoutique: boolean("retrait_boutique").notNull(),
 });
 
-export const InsertDeliveryZoneSchema = createInsertSchema(deliveryZones);
+export const InsertDeliveryZoneSchema = createInsertSchema(deliveryZones, {
+  fraisMad: (schema) => schema.nonnegative("frais_mad ne peut pas être négatif"),
+  delaiHeures: (schema) => schema.positive("delai_heures doit être supérieur à 0"),
+});
 export const SelectDeliveryZoneSchema = createSelectSchema(deliveryZones);
 
 // ---------------------------------------------------------------------------
@@ -101,7 +114,16 @@ export const orders = pgTable("orders", {
   paiement: paiementEnum("paiement").notNull(),
 });
 
-export const InsertOrderSchema = createInsertSchema(orders);
+export const InsertOrderSchema = createInsertSchema(orders, {
+  date: (schema) => schema.max(new Date(), { message: "date ne peut pas être une date future" }),
+  totalArticlesMad: (schema) => schema.nonnegative("total_articles_mad ne peut pas être négatif"),
+  fraisLivraisonMad: (schema) =>
+    schema.nonnegative("frais_livraison_mad ne peut pas être négatif"),
+  totalMad: (schema) => schema.positive("total_mad doit être supérieur à 0"),
+}).refine((order) => order.totalMad === order.totalArticlesMad + order.fraisLivraisonMad, {
+  message: "total_mad doit être égal à total_articles_mad + frais_livraison_mad",
+  path: ["totalMad"],
+});
 export const SelectOrderSchema = createSelectSchema(orders);
 
 // ---------------------------------------------------------------------------
@@ -123,7 +145,10 @@ export const orderItems = pgTable("order_items", {
   prixUnitaireMad: integer("prix_unitaire_mad").notNull(),
 });
 
-export const InsertOrderItemSchema = createInsertSchema(orderItems);
+export const InsertOrderItemSchema = createInsertSchema(orderItems, {
+  quantite: (schema) => schema.positive("quantite doit être supérieure à 0"),
+  prixUnitaireMad: (schema) => schema.positive("prix_unitaire_mad doit être supérieur à 0"),
+});
 export const SelectOrderItemSchema = createSelectSchema(orderItems);
 
 // ---------------------------------------------------------------------------
@@ -144,7 +169,18 @@ export const promotions = pgTable("promotions", {
   condition: text("condition"),
 });
 
-export const InsertPromotionSchema = createInsertSchema(promotions);
+export const InsertPromotionSchema = createInsertSchema(promotions, {
+  prixNormalMad: (schema) => schema.positive("prix_normal_mad doit être supérieur à 0"),
+  prixPromoMad: (schema) => schema.positive("prix_promo_mad doit être supérieur à 0"),
+})
+  .refine((promo) => promo.prixPromoMad < promo.prixNormalMad, {
+    message: "prix_promo_mad doit être inférieur à prix_normal_mad",
+    path: ["prixPromoMad"],
+  })
+  .refine((promo) => promo.fin > promo.debut, {
+    message: "fin doit être postérieure à debut",
+    path: ["fin"],
+  });
 export const SelectPromotionSchema = createSelectSchema(promotions);
 
 // ---------------------------------------------------------------------------
@@ -173,5 +209,7 @@ export const messages = pgTable("messages", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-export const InsertMessageSchema = createInsertSchema(messages);
+export const InsertMessageSchema = createInsertSchema(messages, {
+  content: (schema) => schema.min(1, "content ne peut pas être vide"),
+});
 export const SelectMessageSchema = createSelectSchema(messages);
