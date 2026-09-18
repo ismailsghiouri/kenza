@@ -1,7 +1,13 @@
 import { Annotation } from "@langchain/langgraph";
-import type { OrderStatus, StockIssue } from "@/domain/eligibility";
+import type { OrderStatus } from "@/contracts";
 
 export type KenzaIntent = "search" | "checkout" | "question" | "unknown";
+
+export interface KenzaStockIssue {
+  productId: string;
+  requested: number;
+  available: number;
+}
 
 export type KenzaMessageRole = "user" | "assistant";
 
@@ -24,7 +30,7 @@ export interface KenzaProductResult {
 
 export interface KenzaValidationResult {
   valid: boolean;
-  issues: StockIssue[];
+  issues: KenzaStockIssue[];
 }
 
 export interface KenzaOrderResult {

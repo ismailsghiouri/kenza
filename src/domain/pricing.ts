@@ -1,55 +1,66 @@
-export interface PricingLineItem {
-  unitPriceCents: number;
+export interface PricingItem {
+  price: number;
   quantity: number;
 }
 
-export interface OrderTotalOptions {
-  discountPercent?: number;
-  taxRatePercent?: number;
+export interface DiscountResult {
+  amount: number;
+  capped: boolean;
+  applied: number;
 }
 
-export interface OrderTotalBreakdown {
-  subtotalCents: number;
-  discountCents: number;
-  taxCents: number;
-  totalCents: number;
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
-export function calculateLineItemTotal(item: PricingLineItem): number {
-  return item.unitPriceCents * item.quantity;
+export function calculateSubtotal(items: PricingItem[]): number {
+  return round2(
+    items.reduce((sum, item) => {
+      if (item.price < 0 || item.quantity < 0) {
+        throw new Error("price and quantity must be non-negative");
+      }
+      return sum + item.price * item.quantity;
+    }, 0),
+  );
 }
 
-export function calculateSubtotal(items: PricingLineItem[]): number {
-  return items.reduce((sum, item) => sum + calculateLineItemTotal(item), 0);
-}
-
-export function calculateDiscountAmount(subtotalCents: number, discountPercent: number): number {
-  if (discountPercent < 0 || discountPercent > 100) {
-    throw new Error("discountPercent must be between 0 and 100");
+export function applyTax(subtotal: number, rate: number = 0.2): number {
+  if (subtotal < 0) {
+    throw new Error("subtotal must be non-negative");
   }
-  return Math.round((subtotalCents * discountPercent) / 100);
-}
-
-export function calculateTaxAmount(amountCents: number, taxRatePercent: number): number {
-  if (taxRatePercent < 0) {
-    throw new Error("taxRatePercent must not be negative");
+  if (rate < 0) {
+    throw new Error("rate must be non-negative");
   }
-  return Math.round((amountCents * taxRatePercent) / 100);
+  return round2(subtotal * rate);
 }
 
-export function calculateOrderTotal(
-  items: PricingLineItem[],
-  options: OrderTotalOptions = {},
-): OrderTotalBreakdown {
-  const subtotalCents = calculateSubtotal(items);
-  const discountCents = calculateDiscountAmount(subtotalCents, options.discountPercent ?? 0);
-  const taxableCents = subtotalCents - discountCents;
-  const taxCents = calculateTaxAmount(taxableCents, options.taxRatePercent ?? 0);
-  const totalCents = taxableCents + taxCents;
+export function applyDiscount(
+  subtotal: number,
+  percent: number,
+  maxPercent: number = 10,
+): DiscountResult {
+  if (subtotal < 0) {
+    throw new Error("subtotal must be non-negative");
+  }
+  if (percent < 0) {
+    throw new Error("percent must be non-negative");
+  }
 
-  return { subtotalCents, discountCents, taxCents, totalCents };
+  const capped = percent > maxPercent;
+  const applied = capped ? maxPercent : percent;
+
+  return {
+    amount: round2((subtotal * applied) / 100),
+    capped,
+    applied,
+  };
 }
 
-export function formatPriceCents(cents: number, currency = "MAD"): string {
-  return `${(cents / 100).toFixed(2)} ${currency}`;
+export function calculateTotal(
+  subtotal: number,
+  tax: number,
+  deliveryFee: number,
+  discount: number,
+): number {
+  return Math.max(0, round2(subtotal + tax + deliveryFee - discount));
 }

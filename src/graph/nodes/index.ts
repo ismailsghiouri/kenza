@@ -1,11 +1,12 @@
-import { checkStockAvailability } from "@/domain/eligibility";
-import { calculateOrderTotal } from "@/domain/pricing";
+import { validateStock } from "@/domain/eligibility";
+import { calculateSubtotal } from "@/domain/pricing";
 import type {
   KenzaCartItem,
   KenzaIntent,
   KenzaOrderResult,
   KenzaProductResult,
   KenzaState,
+  KenzaStockIssue,
   StateAnnotation,
 } from "../state";
 
@@ -119,7 +120,16 @@ export function createValidatorNode(deps: Partial<ValidatorDeps> = {}) {
     }
 
     const stock = await getStock(state.cart.map((item) => item.productId));
-    const issues = checkStockAvailability(state.cart, stock);
+    const stockById = new Map(stock.map((row) => [row.id, row.stock]));
+
+    const issues: KenzaStockIssue[] = [];
+    for (const item of state.cart) {
+      const available = stockById.get(item.productId) ?? 0;
+      const result = validateStock(available, item.quantity);
+      if (!result.valid) {
+        issues.push({ productId: item.productId, requested: item.quantity, available });
+      }
+    }
 
     return { validation: { valid: issues.length === 0, issues } };
   };
@@ -216,8 +226,8 @@ async function defaultPlaceOrder(
     };
   });
 
-  const { totalCents: totalArticlesMad } = calculateOrderTotal(
-    lineItems.map((item) => ({ unitPriceCents: item.prixUnitaireMad, quantity: item.quantite })),
+  const totalArticlesMad = calculateSubtotal(
+    lineItems.map((item) => ({ price: item.prixUnitaireMad, quantity: item.quantite })),
   );
 
   const [zone] = await db
