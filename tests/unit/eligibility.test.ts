@@ -132,11 +132,11 @@ describe("isValidMoroccanPhoneNumber", () => {
 });
 
 describe("isOrderCancellable", () => {
-  it.each(["pending", "confirmed"] as const)("returns true for %s orders", (status) => {
+  it.each(["en préparation"] as const)("returns true for %s orders", (status) => {
     expect(isOrderCancellable(status)).toBe(true);
   });
 
-  it.each(["shipped", "delivered", "cancelled"] as const)(
+  it.each(["livrée", "annulée", "retournée", "panier abandonné"] as const)(
     "returns false for %s orders",
     (status) => {
       expect(isOrderCancellable(status)).toBe(false);

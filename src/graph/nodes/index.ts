@@ -1,5 +1,5 @@
 import { checkStockAvailability } from "@/domain/eligibility";
-import { calculateOrderTotal, formatPriceCents } from "@/domain/pricing";
+import { calculateOrderTotal } from "@/domain/pricing";
 import type {
   KenzaCartItem,
   KenzaIntent,
@@ -73,9 +73,9 @@ async function defaultSearch(query: string): Promise<KenzaProductResult[]> {
   const { searchProducts } = await import("@/agent/tools");
   const rows = await searchProducts(query);
   return rows.map((row) => ({
-    id: row.id,
-    name: row.name,
-    priceCents: row.priceCents,
+    id: row.ref,
+    name: row.modele,
+    priceMad: row.prixMad,
     stock: row.stock,
   }));
 }
@@ -106,8 +106,8 @@ async function defaultGetStock(productIds: string[]): Promise<Array<{ id: string
   const { products } = await import("@/db/schema");
   const { inArray } = await import("drizzle-orm");
 
-  const rows = await db.select().from(products).where(inArray(products.id, productIds));
-  return rows.map((row) => ({ id: row.id, stock: row.stock }));
+  const rows = await db.select().from(products).where(inArray(products.ref, productIds));
+  return rows.map((row) => ({ id: row.ref, stock: row.stock }));
 }
 
 export function createValidatorNode(deps: Partial<ValidatorDeps> = {}) {
@@ -183,10 +183,13 @@ async function defaultPlaceOrder(
   customerPhone: string,
 ): Promise<KenzaOrderResult> {
   const { db } = await import("@/db/client");
-  const { customers, products, orders, orderItems } = await import("@/db/schema");
+  const { customers, products, deliveryZones, orders, orderItems } = await import("@/db/schema");
   const { eq, inArray } = await import("drizzle-orm");
 
-  const [customer] = await db.select().from(customers).where(eq(customers.phone, customerPhone));
+  const [customer] = await db
+    .select()
+    .from(customers)
+    .where(eq(customers.telephone, customerPhone));
   if (!customer) {
     throw new Error(`Unknown customer phone: ${customerPhone}`);
   }
@@ -196,25 +199,47 @@ async function defaultPlaceOrder(
     .from(products)
     .where(
       inArray(
-        products.id,
+        products.ref,
         cart.map((item) => item.productId),
       ),
     );
-  const priceById = new Map(productRows.map((row) => [row.id, row.priceCents]));
+  const productByRef = new Map(productRows.map((row) => [row.ref, row]));
 
-  const lineItems = cart.map((item) => ({
-    productId: item.productId,
-    quantity: item.quantity,
-    unitPriceCents: priceById.get(item.productId) ?? 0,
-  }));
+  const lineItems = cart.map((item) => {
+    const product = productByRef.get(item.productId);
+    return {
+      ref: item.productId,
+      modele: product?.modele ?? "",
+      taille: product?.taille ?? "",
+      quantite: item.quantity,
+      prixUnitaireMad: product?.prixMad ?? 0,
+    };
+  });
 
-  const { totalCents } = calculateOrderTotal(
-    lineItems.map((item) => ({ unitPriceCents: item.unitPriceCents, quantity: item.quantity })),
+  const { totalCents: totalArticlesMad } = calculateOrderTotal(
+    lineItems.map((item) => ({ unitPriceCents: item.prixUnitaireMad, quantity: item.quantite })),
   );
+
+  const [zone] = await db
+    .select()
+    .from(deliveryZones)
+    .where(eq(deliveryZones.ville, customer.ville));
+  const fraisLivraisonMad = zone?.fraisMad ?? 0;
 
   const [order] = await db
     .insert(orders)
-    .values({ customerId: customer.id, totalCents, status: "confirmed" })
+    .values({
+      commandeId: `CMD-${crypto.randomUUID()}`,
+      clientId: customer.clientId,
+      date: new Date(),
+      canal: "whatsapp",
+      statut: "en préparation",
+      totalArticlesMad,
+      fraisLivraisonMad,
+      totalMad: totalArticlesMad + fraisLivraisonMad,
+      villeLivraison: customer.ville,
+      paiement: zone?.paiementALaLivraison ? "à la livraison" : "carte",
+    })
     .returning();
 
   if (!order) {
@@ -223,14 +248,16 @@ async function defaultPlaceOrder(
 
   await db.insert(orderItems).values(
     lineItems.map((item) => ({
-      orderId: order.id,
-      productId: item.productId,
-      quantity: item.quantity,
-      unitPriceCents: item.unitPriceCents,
+      commandeId: order.commandeId,
+      ref: item.ref,
+      modele: item.modele,
+      taille: item.taille,
+      quantite: item.quantite,
+      prixUnitaireMad: item.prixUnitaireMad,
     })),
   );
 
-  return { orderId: order.id, status: order.status, totalCents: order.totalCents };
+  return { orderId: order.commandeId, status: order.statut, totalMad: order.totalMad };
 }
 
 export function createCheckoutNode(deps: Partial<CheckoutDeps> = {}) {
@@ -238,7 +265,7 @@ export function createCheckoutNode(deps: Partial<CheckoutDeps> = {}) {
 
   return async function checkoutNode(state: KenzaNodeState): Promise<KenzaNodeResult> {
     const order = await placeOrder(state.cart, state.customerPhone);
-    const confirmation = `Order ${order.orderId} confirmed (${formatPriceCents(order.totalCents)}).`;
+    const confirmation = `Order ${order.orderId} confirmed (${order.totalMad} MAD).`;
 
     return {
       order,

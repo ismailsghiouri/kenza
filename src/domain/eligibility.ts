@@ -1,4 +1,9 @@
-export type OrderStatus = "pending" | "confirmed" | "shipped" | "delivered" | "cancelled";
+export type OrderStatus =
+  | "en préparation"
+  | "livrée"
+  | "annulée"
+  | "retournée"
+  | "panier abandonné";
 
 export interface StockCheckItem {
   productId: string;
@@ -53,7 +58,7 @@ export function isValidMoroccanPhoneNumber(phone: string): boolean {
   return MOROCCAN_PHONE_REGEX.test(phone);
 }
 
-const CANCELLABLE_STATUSES: ReadonlySet<OrderStatus> = new Set(["pending", "confirmed"]);
+const CANCELLABLE_STATUSES: ReadonlySet<OrderStatus> = new Set(["en préparation"]);
 
 export function isOrderCancellable(status: OrderStatus): boolean {
   return CANCELLABLE_STATUSES.has(status);

@@ -5,7 +5,7 @@ import type { KenzaOrderResult, KenzaProductResult } from "@/graph/state";
 describe("kenza orchestration graph", () => {
   it("routes a search intent through search and explainer to a report", async () => {
     const results: KenzaProductResult[] = [
-      { id: "p1", name: "Huile d'argan", priceCents: 1500, stock: 10 },
+      { id: "p1", name: "Huile d'argan", priceMad: 150, stock: 10 },
     ];
 
     const graph = buildKenzaGraph({
@@ -32,7 +32,7 @@ describe("kenza orchestration graph", () => {
   });
 
   it("routes a valid checkout through the validator and checkout node to a report", async () => {
-    const order: KenzaOrderResult = { orderId: "order-1", status: "confirmed", totalCents: 3000 };
+    const order: KenzaOrderResult = { orderId: "order-1", status: "en préparation", totalMad: 300 };
 
     const graph = buildKenzaGraph({
       classifier: { classify: async () => "checkout" },

@@ -18,7 +18,7 @@ export interface KenzaCartItem {
 export interface KenzaProductResult {
   id: string;
   name: string;
-  priceCents: number;
+  priceMad: number;
   stock: number;
 }
 
@@ -30,7 +30,7 @@ export interface KenzaValidationResult {
 export interface KenzaOrderResult {
   orderId: string;
   status: OrderStatus;
-  totalCents: number;
+  totalMad: number;
 }
 
 export interface KenzaState {

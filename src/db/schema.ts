@@ -1,91 +1,162 @@
-import { pgTable, uuid, text, timestamp, integer, boolean, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, date, boolean, uuid, timestamp, pgEnum } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 
-export const orderStatusEnum = pgEnum("order_status", [
-  "pending",
-  "confirmed",
-  "shipped",
-  "delivered",
-  "cancelled",
+// ---------------------------------------------------------------------------
+// Enums — fixed value sets defined by the Kenza boutique's business rules
+// (see politique-commerciale.md / faq-boutique.md)
+// ---------------------------------------------------------------------------
+
+export const genreEnum = pgEnum("genre", ["femme", "homme", "mixte"]);
+
+export const languePrefereeEnum = pgEnum("langue_preferee", ["fr", "darija", "ar"]);
+
+export const segmentEnum = pgEnum("segment", ["nouveau", "régulier", "fidèle"]);
+
+export const canalEnum = pgEnum("canal", ["whatsapp", "instagram", "boutique"]);
+
+export const statutCommandeEnum = pgEnum("statut_commande", [
+  "en préparation",
+  "livrée",
+  "annulée",
+  "retournée",
+  "panier abandonné",
 ]);
+
+export const paiementEnum = pgEnum("paiement", ["à la livraison", "carte", "virement"]);
 
 export const messageRoleEnum = pgEnum("message_role", ["user", "assistant"]);
 
-export const productCategoryEnum = pgEnum("product_category", [
-  "phone",
-  "tablet",
-  "laptop",
-  "accessory",
-]);
-
-export const customers = pgTable("customers", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  phone: text("phone").notNull().unique(),
-  name: text("name"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
-
-export const InsertCustomerSchema = createInsertSchema(customers);
-export const SelectCustomerSchema = createSelectSchema(customers);
+// ---------------------------------------------------------------------------
+// products — mirrors catalogue.csv (one row per ref/taille variant)
+// ---------------------------------------------------------------------------
 
 export const products = pgTable("products", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  name: text("name").notNull(),
-  description: text("description"),
-  category: productCategoryEnum("category").notNull(),
-  priceCents: integer("price_cents").notNull(),
+  ref: text("ref").primaryKey(),
+  modele: text("modele").notNull(),
+  famille: text("famille").notNull(),
+  genre: genreEnum("genre").notNull(),
+  couleur: text("couleur").notNull(),
+  taille: text("taille").notNull(),
+  matiere: text("matiere").notNull(),
+  saison: text("saison").notNull(),
+  prixMad: integer("prix_mad").notNull(),
   stock: integer("stock").notNull().default(0),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
+  delaiReassortJours: integer("delai_reassort_jours"),
+  codeBarre: text("code_barre").notNull().unique(),
+  poidsG: integer("poids_g").notNull(),
 });
 
 export const InsertProductSchema = createInsertSchema(products);
 export const SelectProductSchema = createSelectSchema(products);
 
-export const discounts = pgTable("discounts", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  code: text("code").notNull().unique(),
-  description: text("description"),
-  percent: integer("percent").notNull(),
-  active: boolean("active").notNull().default(true),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
+// ---------------------------------------------------------------------------
+// customers — mirrors clients.csv
+// ---------------------------------------------------------------------------
+
+export const customers = pgTable("customers", {
+  clientId: text("client_id").primaryKey(),
+  nom: text("nom").notNull(),
+  telephone: text("telephone").notNull().unique(),
+  ville: text("ville").notNull(),
+  languePreferee: languePrefereeEnum("langue_preferee").notNull(),
+  premierAchat: date("premier_achat", { mode: "date" }).notNull(),
+  nbCommandes: integer("nb_commandes").notNull().default(0),
+  segment: segmentEnum("segment").notNull(),
 });
 
-export const InsertDiscountSchema = createInsertSchema(discounts);
-export const SelectDiscountSchema = createSelectSchema(discounts);
+export const InsertCustomerSchema = createInsertSchema(customers);
+export const SelectCustomerSchema = createSelectSchema(customers);
+
+// ---------------------------------------------------------------------------
+// deliveryZones — mirrors livraison.csv
+// ---------------------------------------------------------------------------
+
+export const deliveryZones = pgTable("delivery_zones", {
+  ville: text("ville").primaryKey(),
+  fraisMad: integer("frais_mad").notNull(),
+  delaiHeures: integer("delai_heures").notNull(),
+  paiementALaLivraison: boolean("paiement_a_la_livraison").notNull(),
+  retraitBoutique: boolean("retrait_boutique").notNull(),
+});
+
+export const InsertDeliveryZoneSchema = createInsertSchema(deliveryZones);
+export const SelectDeliveryZoneSchema = createSelectSchema(deliveryZones);
+
+// ---------------------------------------------------------------------------
+// orders — mirrors commandes.csv
+// ---------------------------------------------------------------------------
 
 export const orders = pgTable("orders", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  customerId: uuid("customer_id")
+  commandeId: text("commande_id").primaryKey(),
+  clientId: text("client_id")
     .notNull()
-    .references(() => customers.id),
-  status: orderStatusEnum("status").notNull().default("pending"),
-  totalCents: integer("total_cents").notNull(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
+    .references(() => customers.clientId),
+  date: date("date", { mode: "date" }).notNull(),
+  canal: canalEnum("canal").notNull(),
+  statut: statutCommandeEnum("statut").notNull(),
+  totalArticlesMad: integer("total_articles_mad").notNull(),
+  fraisLivraisonMad: integer("frais_livraison_mad").notNull(),
+  totalMad: integer("total_mad").notNull(),
+  villeLivraison: text("ville_livraison").notNull(),
+  paiement: paiementEnum("paiement").notNull(),
 });
 
 export const InsertOrderSchema = createInsertSchema(orders);
 export const SelectOrderSchema = createSelectSchema(orders);
 
+// ---------------------------------------------------------------------------
+// orderItems — mirrors commandes-lignes.csv (no natural single-column key,
+// so a synthetic uuid id is added)
+// ---------------------------------------------------------------------------
+
 export const orderItems = pgTable("order_items", {
   id: uuid("id").primaryKey().defaultRandom(),
-  orderId: uuid("order_id")
+  commandeId: text("commande_id")
     .notNull()
-    .references(() => orders.id),
-  productId: uuid("product_id")
+    .references(() => orders.commandeId),
+  ref: text("ref")
     .notNull()
-    .references(() => products.id),
-  quantity: integer("quantity").notNull(),
-  unitPriceCents: integer("unit_price_cents").notNull(),
+    .references(() => products.ref),
+  modele: text("modele").notNull(),
+  taille: text("taille").notNull(),
+  quantite: integer("quantite").notNull(),
+  prixUnitaireMad: integer("prix_unitaire_mad").notNull(),
 });
 
 export const InsertOrderItemSchema = createInsertSchema(orderItems);
 export const SelectOrderItemSchema = createSelectSchema(orderItems);
 
+// ---------------------------------------------------------------------------
+// promotions — mirrors promotions.csv (no natural single-column key,
+// so a synthetic uuid id is added)
+// ---------------------------------------------------------------------------
+
+export const promotions = pgTable("promotions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ref: text("ref")
+    .notNull()
+    .references(() => products.ref),
+  modele: text("modele").notNull(),
+  prixNormalMad: integer("prix_normal_mad").notNull(),
+  prixPromoMad: integer("prix_promo_mad").notNull(),
+  debut: date("debut", { mode: "date" }).notNull(),
+  fin: date("fin", { mode: "date" }).notNull(),
+  condition: text("condition"),
+});
+
+export const InsertPromotionSchema = createInsertSchema(promotions);
+export const SelectPromotionSchema = createSelectSchema(promotions);
+
+// ---------------------------------------------------------------------------
+// conversations / messages — WhatsApp agent conversation history
+// (not sourced from the CSV exports)
+// ---------------------------------------------------------------------------
+
 export const conversations = pgTable("conversations", {
   id: uuid("id").primaryKey().defaultRandom(),
-  customerId: uuid("customer_id")
+  clientId: text("client_id")
     .notNull()
-    .references(() => customers.id),
+    .references(() => customers.clientId),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
