@@ -6,6 +6,7 @@ import {
   validateDiscount as validateDiscountGuardrail,
   detectMandatoryEscalation,
 } from "./guardrails";
+import { validateAgainstPolicy } from "../guardrails";
 import type {
   EscalationReason,
   KenzaCartItem,
@@ -474,13 +475,31 @@ export function createExplainerNode(deps: Partial<ExplainerDeps> = {}) {
     const nextState = { ...state, requiresEscalation, escalationReasons };
 
     const explanation = await explain(nextState);
-    logger.info("explainer: réponse générée", { requiresEscalation });
+
+    // Final gate: validate the drafted decision against politique-commerciale.md
+    // before it reaches the customer.
+    const policyCheck = validateAgainstPolicy({ ...nextState, explanation });
+    for (const violation of policyCheck.violations) {
+      if (!escalationReasons.includes(violation as EscalationReason)) {
+        escalationReasons.push(violation as EscalationReason);
+      }
+    }
+
+    const finalRequiresEscalation = requiresEscalation || !policyCheck.valid;
+    const finalExplanation = policyCheck.valid
+      ? explanation
+      : "Votre demande nécessite une validation par notre équipe. Nous revenons vers vous rapidement (in raje3 lik l'équipe f wa9tha).";
+
+    logger.info("explainer: réponse générée", {
+      requiresEscalation: finalRequiresEscalation,
+      violations: policyCheck.violations,
+    });
 
     return {
-      explanation,
-      requiresEscalation,
+      explanation: finalExplanation,
+      requiresEscalation: finalRequiresEscalation,
       escalationReasons,
-      messages: [{ role: "assistant", content: explanation }],
+      messages: [{ role: "assistant", content: finalExplanation }],
     };
   };
 }

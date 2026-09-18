@@ -78,7 +78,14 @@ export type EscalationReason =
   | "out_of_stock"
   | "delivery_unavailable"
   | "policy_violation"
-  | "language_barrier";
+  | "language_barrier"
+  // Emitted by validateAgainstPolicy() (see ./guardrails.ts) — one per rule.
+  | "price_invention"
+  | "promised_restock"
+  | "discount_below_threshold"
+  | "delivery_city_out_of_grid"
+  | "payment_method_not_allowed"
+  | "exchange_policy_violation";
 
 export interface KenzaState {
   customerPhone: string;
