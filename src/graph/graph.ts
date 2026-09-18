@@ -39,13 +39,27 @@ export function buildKenzaGraph(
 // webhook invocations.
 // ---------------------------------------------------------------------------
 
-const connectionString = process.env["DATABASE_URL"];
+let lazyCheckpointer: PostgresSaver | undefined;
 
-if (!connectionString) {
-  throw new Error("DATABASE_URL is not set");
+function getCheckpointer(): PostgresSaver {
+  if (!lazyCheckpointer) {
+    const connectionString = process.env["DATABASE_URL"];
+    if (!connectionString) {
+      throw new Error("DATABASE_URL is not set");
+    }
+    lazyCheckpointer = PostgresSaver.fromConnString(connectionString);
+  }
+  return lazyCheckpointer;
 }
 
-export const checkpointer = PostgresSaver.fromConnString(connectionString);
+// Proxy defers connecting/validating DATABASE_URL until the checkpointer is
+// actually used, so importing this module (e.g. during `next build`'s page-data
+// collection) doesn't require a database connection to be configured.
+export const checkpointer: PostgresSaver = new Proxy({} as PostgresSaver, {
+  get(_target, prop, receiver) {
+    return Reflect.get(getCheckpointer(), prop, receiver);
+  },
+});
 
 let checkpointerReady: Promise<void> | null = null;
 
@@ -56,7 +70,10 @@ let checkpointerReady: Promise<void> | null = null;
  */
 export function ensureCheckpointerReady(): Promise<void> {
   if (!checkpointerReady) {
-    checkpointerReady = checkpointer.setup();
+    checkpointerReady = checkpointer.setup().catch((err: unknown) => {
+      checkpointerReady = null;
+      throw err;
+    });
   }
   return checkpointerReady;
 }
