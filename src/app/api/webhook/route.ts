@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sendWhatsAppMessage, verifyWebhookChallenge } from "@/lib/whatsapp";
-import { kenzaGraph } from "@/graph/graph";
+import { kenzaGraph, ensureCheckpointerReady } from "@/graph/graph";
 import type { WhatsAppWebhookPayload } from "@/types";
 
 export function GET(request: NextRequest) {
@@ -27,11 +27,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "ignored" });
   }
 
-  const final = await kenzaGraph.invoke({
-    customerPhone: message.from,
-    conversationId: message.from,
-    rawMessage: message.text.body,
-  });
+  await ensureCheckpointerReady();
+
+  const final = await kenzaGraph.invoke(
+    {
+      customerPhone: message.from,
+      conversationId: message.from,
+      rawMessage: message.text.body,
+    },
+    { configurable: { thread_id: message.from } },
+  );
 
   const reply = final.messages.at(-1)?.content ?? "";
 

@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import "dotenv/config";
 import { buildKenzaGraph } from "@/graph/graph";
 import type { KenzaOrderResult, KenzaProductResult } from "@/graph/state";
 

@@ -29,6 +29,7 @@
     "@anthropic-ai/sdk": "^0.32.1",
     "@langchain/core": "^0.3.27",
     "@langchain/langgraph": "^0.2.41",
+    "@langchain/langgraph-checkpoint-postgres": "^0.0.5",
     "dotenv": "^16.4.7",
     "drizzle-orm": "^0.38.3",
     "drizzle-zod": "^0.8.3",
