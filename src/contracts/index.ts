@@ -41,7 +41,16 @@ export type WhatsAppWebhookPayload = z.infer<typeof whatsAppWebhookPayloadSchema
 // Agent domain contracts (mirrors src/graph/state.ts)
 // ---------------------------------------------------------------------------
 
-export const kenzaIntentSchema = z.enum(["search", "checkout", "question", "unknown"]);
+export const kenzaIntentSchema = z.enum([
+  "search",
+  "add_to_cart",
+  "checkout",
+  "apply_discount",
+  "product_info",
+  "escalation",
+  "question",
+  "unknown",
+]);
 
 export const kenzaCartItemSchema = z.object({
   productId: z.string(),

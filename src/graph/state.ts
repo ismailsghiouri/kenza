@@ -2,7 +2,15 @@ import { Annotation } from "@langchain/langgraph";
 import type { OrderStatus, Product } from "@/contracts";
 import { applyDiscount as capDiscountPercent } from "@/domain/pricing";
 
-export type KenzaIntent = "search" | "checkout" | "question" | "unknown";
+export type KenzaIntent =
+  | "search"
+  | "add_to_cart"
+  | "checkout"
+  | "apply_discount"
+  | "product_info"
+  | "escalation"
+  | "question"
+  | "unknown";
 
 export interface KenzaStockIssue {
   productId: string;
@@ -54,6 +62,16 @@ export interface KenzaOrderResult {
   totalMad: number;
 }
 
+// Output of the calculator node — subtotal/TVA/livraison/promotions breakdown
+// for the priced cart, ahead of order placement.
+export interface KenzaPricing {
+  subtotalMad: number;
+  taxMad: number;
+  deliveryFeeMad: number;
+  discountMad: number;
+  totalMad: number;
+}
+
 // Mandatory hand-off-to-human reasons, per politique-commerciale.md.
 export type EscalationReason =
   | "low_discount"
@@ -68,14 +86,16 @@ export interface KenzaState {
   rawMessage: string;
   messages: KenzaMessage[];
   intent: KenzaIntent;
+  intentConfidence: number;
   cart: KenzaCartItem[];
   searchResults: KenzaProductResult[];
   productCandidates: KenzaProductCandidate[];
   validation: KenzaValidationResult | null;
+  pricing: KenzaPricing | null;
   explanation: string;
   order: KenzaOrderResult | null;
   requiresEscalation: boolean;
-  escalationReason: EscalationReason | null;
+  escalationReasons: EscalationReason[];
   report: string;
   error: string | null;
 }
@@ -91,6 +111,10 @@ export const StateAnnotation = Annotation.Root({
   intent: Annotation<KenzaState["intent"]>({
     reducer: (_current, update) => update,
     default: () => "unknown",
+  }),
+  intentConfidence: Annotation<KenzaState["intentConfidence"]>({
+    reducer: (_current, update) => update,
+    default: () => 0,
   }),
   cart: Annotation<KenzaState["cart"]>({
     reducer: (_current, update) => update,
@@ -108,6 +132,10 @@ export const StateAnnotation = Annotation.Root({
     reducer: (_current, update) => update,
     default: () => null,
   }),
+  pricing: Annotation<KenzaState["pricing"]>({
+    reducer: (_current, update) => update,
+    default: () => null,
+  }),
   explanation: Annotation<KenzaState["explanation"]>({
     reducer: (_current, update) => update,
     default: () => "",
@@ -120,9 +148,9 @@ export const StateAnnotation = Annotation.Root({
     reducer: (_current, update) => update,
     default: () => false,
   }),
-  escalationReason: Annotation<KenzaState["escalationReason"]>({
+  escalationReasons: Annotation<KenzaState["escalationReasons"]>({
     reducer: (_current, update) => update,
-    default: () => null,
+    default: () => [],
   }),
   report: Annotation<KenzaState["report"]>({
     reducer: (_current, update) => update,
@@ -150,14 +178,16 @@ export function createInitialState(
     rawMessage: rawInput,
     messages: [],
     intent: "unknown",
+    intentConfidence: 0,
     cart: [],
     searchResults: [],
     productCandidates: [],
     validation: null,
+    pricing: null,
     explanation: "",
     order: null,
     requiresEscalation: false,
-    escalationReason: null,
+    escalationReasons: [],
     report: "",
     error: null,
   };

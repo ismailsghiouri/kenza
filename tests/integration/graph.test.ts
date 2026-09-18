@@ -9,8 +9,8 @@ describe("kenza orchestration graph", () => {
     ];
 
     const graph = buildKenzaGraph({
-      classifier: { classify: async () => "search" },
-      search: { search: async () => results },
+      classifier: { classify: async () => ({ intent: "search", confidence: 1 }) },
+      search: { search: async () => ({ results, candidates: [] }) },
       explainer: { explain: async (state) => `Found ${state.searchResults.length} products` },
     });
 
@@ -35,8 +35,18 @@ describe("kenza orchestration graph", () => {
     const order: KenzaOrderResult = { orderId: "order-1", status: "en préparation", totalMad: 300 };
 
     const graph = buildKenzaGraph({
-      classifier: { classify: async () => "checkout" },
-      validator: { getStock: async () => [{ id: "p1", stock: 5 }] },
+      classifier: { classify: async () => ({ intent: "checkout", confidence: 1 }) },
+      validator: {
+        getStock: async () => [{ id: "p1", stock: 5 }],
+        getCustomerVille: async () => "Casablanca",
+        getKnownVilles: async () => ["Casablanca"],
+      },
+      calculator: {
+        calculate: async (cart) => ({
+          cart,
+          pricing: { subtotalMad: 300, taxMad: 60, deliveryFeeMad: 0, discountMad: 0, totalMad: 360 },
+        }),
+      },
       checkout: { placeOrder: async () => order },
     });
 
@@ -54,8 +64,12 @@ describe("kenza orchestration graph", () => {
 
   it("routes an invalid checkout to the explainer instead of placing an order", async () => {
     const graph = buildKenzaGraph({
-      classifier: { classify: async () => "checkout" },
-      validator: { getStock: async () => [{ id: "p1", stock: 1 }] },
+      classifier: { classify: async () => ({ intent: "checkout", confidence: 1 }) },
+      validator: {
+        getStock: async () => [{ id: "p1", stock: 1 }],
+        getCustomerVille: async () => "Casablanca",
+        getKnownVilles: async () => ["Casablanca"],
+      },
       explainer: { explain: async () => "Il ne reste pas assez de stock" },
     });
 
@@ -77,7 +91,7 @@ describe("kenza orchestration graph", () => {
 
   it("routes an unrecognized intent straight to the explainer", async () => {
     const graph = buildKenzaGraph({
-      classifier: { classify: async () => "question" },
+      classifier: { classify: async () => ({ intent: "question", confidence: 1 }) },
       explainer: { explain: async () => "Nos horaires sont 9h-18h" },
     });
 
