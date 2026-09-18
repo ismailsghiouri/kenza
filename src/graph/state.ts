@@ -1,5 +1,6 @@
 import { Annotation } from "@langchain/langgraph";
-import type { OrderStatus } from "@/contracts";
+import type { OrderStatus, Product } from "@/contracts";
+import { applyDiscount as capDiscountPercent } from "@/domain/pricing";
 
 export type KenzaIntent = "search" | "checkout" | "question" | "unknown";
 
@@ -16,9 +17,23 @@ export interface KenzaMessage {
   content: string;
 }
 
+// Mirrors catalogue.csv (via the canonical Product contract), plus ranking
+// metadata attached by the search node.
+export interface KenzaProductCandidate extends Product {
+  score?: number;
+  matchReason?: string;
+}
+
+// Mirrors commandes-lignes.csv (ref/modele/taille/quantite/prix_unitaire_mad).
+// Only productId and quantity are required so existing Partial<KenzaState>
+// call sites (graph invocations, tests) keep working without every field.
 export interface KenzaCartItem {
-  productId: string;
-  quantity: number;
+  productId: string; // ref
+  quantity: number; // quantite
+  name?: string; // modele
+  size?: string; // taille
+  unitPriceMad?: number; // prix_unitaire_mad
+  discountPercent?: number;
 }
 
 export interface KenzaProductResult {
@@ -39,6 +54,14 @@ export interface KenzaOrderResult {
   totalMad: number;
 }
 
+// Mandatory hand-off-to-human reasons, per politique-commerciale.md.
+export type EscalationReason =
+  | "low_discount"
+  | "out_of_stock"
+  | "delivery_unavailable"
+  | "policy_violation"
+  | "language_barrier";
+
 export interface KenzaState {
   customerPhone: string;
   conversationId: string;
@@ -47,9 +70,12 @@ export interface KenzaState {
   intent: KenzaIntent;
   cart: KenzaCartItem[];
   searchResults: KenzaProductResult[];
+  productCandidates: KenzaProductCandidate[];
   validation: KenzaValidationResult | null;
   explanation: string;
   order: KenzaOrderResult | null;
+  requiresEscalation: boolean;
+  escalationReason: EscalationReason | null;
   report: string;
   error: string | null;
 }
@@ -74,6 +100,10 @@ export const StateAnnotation = Annotation.Root({
     reducer: (_current, update) => update,
     default: () => [],
   }),
+  productCandidates: Annotation<KenzaState["productCandidates"]>({
+    reducer: (_current, update) => update,
+    default: () => [],
+  }),
   validation: Annotation<KenzaState["validation"]>({
     reducer: (_current, update) => update,
     default: () => null,
@@ -86,6 +116,14 @@ export const StateAnnotation = Annotation.Root({
     reducer: (_current, update) => update,
     default: () => null,
   }),
+  requiresEscalation: Annotation<KenzaState["requiresEscalation"]>({
+    reducer: (_current, update) => update,
+    default: () => false,
+  }),
+  escalationReason: Annotation<KenzaState["escalationReason"]>({
+    reducer: (_current, update) => update,
+    default: () => null,
+  }),
   report: Annotation<KenzaState["report"]>({
     reducer: (_current, update) => update,
     default: () => "",
@@ -95,3 +133,111 @@ export const StateAnnotation = Annotation.Root({
     default: () => null,
   }),
 });
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Builds a fresh KenzaState for a new inbound message (requestId -> conversationId). */
+export function createInitialState(
+  requestId: string,
+  customerPhone: string,
+  rawInput: string,
+): KenzaState {
+  return {
+    customerPhone,
+    conversationId: requestId,
+    rawMessage: rawInput,
+    messages: [],
+    intent: "unknown",
+    cart: [],
+    searchResults: [],
+    productCandidates: [],
+    validation: null,
+    explanation: "",
+    order: null,
+    requiresEscalation: false,
+    escalationReason: null,
+    report: "",
+    error: null,
+  };
+}
+
+/** Sums quantity * unitPriceMad across the cart, net of any per-item discountPercent. */
+export function updateCartTotal(cart: KenzaCartItem[]): number {
+  return cart.reduce((total, item) => {
+    const unitPrice = item.unitPriceMad ?? 0;
+    const lineTotal = unitPrice * item.quantity;
+    const discount = item.discountPercent ? (lineTotal * item.discountPercent) / 100 : 0;
+    return total + (lineTotal - discount);
+  }, 0);
+}
+
+/** Returns a new cart with the item appended, merging quantity if the same productId+size is already present. */
+export function addItemToCart(
+  cart: KenzaCartItem[],
+  productId: string,
+  name: string,
+  price: number,
+  quantity: number,
+  size?: string,
+): KenzaCartItem[] {
+  const existingIndex = cart.findIndex(
+    (item) => item.productId === productId && item.size === size,
+  );
+
+  if (existingIndex === -1) {
+    return [
+      ...cart,
+      size !== undefined
+        ? { productId, name, unitPriceMad: price, quantity, size }
+        : { productId, name, unitPriceMad: price, quantity },
+    ];
+  }
+
+  return cart.map((item, index) =>
+    index === existingIndex ? { ...item, quantity: item.quantity + quantity } : item,
+  );
+}
+
+/** Applies a discount percent (capped at maxPercent) to every item in the cart. */
+export function applyDiscount(
+  cart: KenzaCartItem[],
+  percent: number,
+  maxPercent: number = 10,
+): KenzaCartItem[] {
+  const subtotal = updateCartTotal(cart);
+  const { applied } = capDiscountPercent(subtotal, percent, maxPercent);
+  return cart.map((item) => ({ ...item, discountPercent: applied }));
+}
+
+export interface KenzaCartValidationResult {
+  valid: boolean;
+  errors: string[];
+}
+
+/** Structural validation of the cart's own data (not stock — that's the validator node's job). */
+export function validateCart(cart: KenzaCartItem[]): KenzaCartValidationResult {
+  const errors: string[] = [];
+
+  if (cart.length === 0) {
+    errors.push("Cart is empty");
+  }
+
+  for (const item of cart) {
+    if (!item.productId) {
+      errors.push("Cart item is missing a productId");
+    }
+    if (!Number.isInteger(item.quantity) || item.quantity <= 0) {
+      errors.push(`Invalid quantity for ${item.productId || "unknown item"}: ${item.quantity}`);
+    }
+    if (item.unitPriceMad !== undefined && item.unitPriceMad < 0) {
+      errors.push(`Invalid unitPriceMad for ${item.productId}: ${item.unitPriceMad}`);
+    }
+    if (item.discountPercent !== undefined && (item.discountPercent < 0 || item.discountPercent > 100)) {
+      errors.push(`Invalid discountPercent for ${item.productId}: ${item.discountPercent}`);
+    }
+  }
+
+  return { valid: errors.length === 0, errors };
+}
